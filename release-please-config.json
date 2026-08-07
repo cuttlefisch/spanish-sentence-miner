@@ -8,6 +8,7 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "include-v-in-tag": true,
+      "include-component-in-tag": false,
       "extra-files": ["src/spanish_sentence_miner/__init__.py"]
     }
   },
