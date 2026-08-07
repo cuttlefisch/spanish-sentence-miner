@@ -26,12 +26,13 @@ dependencies = [
     "ebooklib>=0.18",
     "beautifulsoup4>=4.12",
     "lxml>=5.2",
-    "spacy>=3.8.7",
-    # Pin spaCy's C-extension transitive deps to versions that publish cp313 wheels — the
-    # resolver otherwise picks srsly 2.4.8 (no cp313 wheel, won't compile against the 3.13
-    # C API). Carried over from calibre-to-anki-conversion/MAINTAINING.md.
-    "srsly>=2.5.1",
-    "thinc>=8.3.4",
+    "spacy>=3.8.7,<3.9",
+    # Pin spaCy's C-extension transitive deps to versions that publish cp313 wheels, WITH
+    # upper bounds: without them pip tries to build thinc 9.x / srsly 3.x from source (no
+    # cp313 wheels) and fails on NumPy's Cython headers. The <8.4 / <3 caps match what
+    # spaCy 3.8.x itself requires. (Carried over from calibre-to-anki MAINTAINING.md.)
+    "srsly>=2.5.1,<3",
+    "thinc>=8.3.4,<8.4",
     "wordfreq>=3.1",
     "pydantic>=2.7",
 ]
