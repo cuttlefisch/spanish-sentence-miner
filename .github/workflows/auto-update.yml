@@ -39,13 +39,13 @@ jobs:
               case "$author" in
                 dependabot*|app/dependabot)
                   # Prefer auto-merge (waits for pending checks); if the PR is already
-                  # green + up to date, --auto errors ("clean status") so merge directly.
-                  if gh pr merge --auto --squash "$n" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                  # green, --auto errors ("clean status") so merge directly. Surface errors.
+                  if out=$(gh pr merge --auto --squash "$n" --repo "$GITHUB_REPOSITORY" 2>&1); then
                     echo "  auto-merge enabled"
-                  elif gh pr merge --squash "$n" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                  elif out=$(gh pr merge --squash "$n" --repo "$GITHUB_REPOSITORY" 2>&1); then
                     echo "  merged directly (already green)"
                   else
-                    echo "  (could not merge — check required statuses)"
+                    echo "  MERGE FAILED: $out"
                   fi
                   ;;
               esac
