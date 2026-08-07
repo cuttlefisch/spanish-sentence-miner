@@ -42,7 +42,7 @@ from spanish_sentence_miner.nlp.pipeline import (
     norm_lemma,
 )
 
-__version__ = "0.1.0"  # x-release-please-version
+__version__ = "0.1.1"  # x-release-please-version
 
 __all__ = [
     "Candidate",
