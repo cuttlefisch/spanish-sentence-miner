@@ -1,0 +1,22 @@
+name: Auto-merge Dependabot
+
+# Enable auto-merge on Dependabot PRs; they merge once the required CI check passes and the
+# branch is up to date (kept current by auto-update.yml). Human PRs are unaffected.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge (squash)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr merge --auto --squash "$PR" --repo "$GITHUB_REPOSITORY" || true
