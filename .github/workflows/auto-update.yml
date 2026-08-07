@@ -1,13 +1,13 @@
 name: Auto-update PR branches
 
-# "Automatic backmerge": whenever main advances, bring every open PR up to date (branch
-# protection requires up-to-date branches). Uses a PAT so the resulting branch update
-# re-triggers CI (the default GITHUB_TOKEN cannot). Also (re)enables auto-merge on any open
-# Dependabot PR so the queue drains without manual steps.
+# "Automatic backmerge" + drain: when main advances (or on demand), merge green Dependabot
+# PRs and bring the rest up to date. Two tokens by necessity:
+#   - GITHUB_TOKEN merges (fine-grained PATs get "Resource not accessible" on mergePullRequest)
+#   - RELEASE_PLEASE_TOKEN backmerges (re-triggers CI, and can touch workflow files)
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}   # manual "drain the queue" trigger
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -21,32 +21,36 @@ jobs:
   update:
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+      UPDATE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+      MERGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Backmerge main into open PRs; enable Dependabot auto-merge
+      - name: Merge green Dependabot PRs; backmerge the rest
         run: |
-          gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+          GH_TOKEN="$UPDATE_TOKEN" gh pr list --repo "$GITHUB_REPOSITORY" --state open \
             --json number,isDraft,author \
             --jq '.[] | select(.isDraft==false) | "\(.number) \(.author.login)"' \
           | while read -r n author; do
               echo "PR #$n (author: $author)"
-              if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$n/update-branch" \
-                   -H "Accept: application/vnd.github+json" >/dev/null 2>&1; then
-                echo "  backmerged main"
-              else
-                echo "  (already up to date or not updatable)"
-              fi
+              merged=""
               case "$author" in
                 dependabot*|app/dependabot)
-                  # Prefer auto-merge (waits for pending checks); if the PR is already
-                  # green, --auto errors ("clean status") so merge directly. Surface errors.
-                  if out=$(gh pr merge --auto --squash "$n" --repo "$GITHUB_REPOSITORY" 2>&1); then
-                    echo "  auto-merge enabled"
-                  elif out=$(gh pr merge --squash "$n" --repo "$GITHUB_REPOSITORY" 2>&1); then
-                    echo "  merged directly (already green)"
+                  # green + clean → --auto errors ("clean status"), so fall back to direct merge
+                  if out=$(GH_TOKEN="$MERGE_TOKEN" gh pr merge --auto --squash "$n" --repo "$GITHUB_REPOSITORY" 2>&1); then
+                    echo "  auto-merge enabled"; merged=1
+                  elif out=$(GH_TOKEN="$MERGE_TOKEN" gh pr merge --squash "$n" --repo "$GITHUB_REPOSITORY" 2>&1); then
+                    echo "  merged directly (already green)"; merged=1
                   else
-                    echo "  MERGE FAILED: $out"
+                    echo "  not mergeable yet: $out"
                   fi
                   ;;
               esac
+              # If not merged (pending/red/human PR), backmerge main to refresh + re-trigger CI.
+              if [ -z "$merged" ]; then
+                if GH_TOKEN="$UPDATE_TOKEN" gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$n/update-branch" \
+                     -H "Accept: application/vnd.github+json" >/dev/null 2>&1; then
+                  echo "  backmerged main (CI will re-run)"
+                else
+                  echo "  (already up to date)"
+                fi
+              fi
             done
