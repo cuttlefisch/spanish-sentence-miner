@@ -1,0 +1,44 @@
+name: Auto-update PR branches
+
+# "Automatic backmerge": whenever main advances, bring every open PR up to date (branch
+# protection requires up-to-date branches). Uses a PAT so the resulting branch update
+# re-triggers CI (the default GITHUB_TOKEN cannot). Also (re)enables auto-merge on any open
+# Dependabot PR so the queue drains without manual steps.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-update-prs
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Backmerge main into open PRs; enable Dependabot auto-merge
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --json number,isDraft,author \
+            --jq '.[] | select(.isDraft==false) | "\(.number) \(.author.login)"' \
+          | while read -r n author; do
+              echo "PR #$n (author: $author)"
+              if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$n/update-branch" \
+                   -H "Accept: application/vnd.github+json" >/dev/null 2>&1; then
+                echo "  backmerged main"
+              else
+                echo "  (already up to date or not updatable)"
+              fi
+              case "$author" in
+                dependabot*|app/dependabot)
+                  gh pr merge --auto --squash "$n" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+                    && echo "  auto-merge enabled" || echo "  (auto-merge not enabled)"
+                  ;;
+              esac
+            done
