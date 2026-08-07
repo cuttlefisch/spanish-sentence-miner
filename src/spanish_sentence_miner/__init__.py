@@ -54,7 +54,7 @@ from spanish_sentence_miner.textbook.schema import (
     load_units,
 )
 
-__version__ = "0.1.1"  # x-release-please-version
+__version__ = "0.1.2"  # x-release-please-version
 
 __all__ = [
     "Candidate",
